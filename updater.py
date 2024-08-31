@@ -1,12 +1,12 @@
-import requests
 import os
+import subprocess
 
 # Define the URLs of proxy lists to update from
-PROXY_LIST_URLS = [
-    "https://www.proxy-list.download/api/v1/get?type=https",
-    "https://www.proxy-list.download/api/v1/get?type=socks4",
-    "https://www.proxy-list.download/api/v1/get?type=socks5"
-]
+PROXY_LIST_URLS = {
+    "https": "https://www.proxy-list.download/api/v1/get?type=https",
+    "socks4": "https://www.proxy-list.download/api/v1/get?type=socks4",
+    "socks5": "https://www.proxy-list.download/api/v1/get?type=socks5"
+}
 
 # Define the paths where the proxies will be saved
 FILE_PATHS = {
@@ -17,17 +17,23 @@ FILE_PATHS = {
 
 def update_proxy_list(url, file_path):
     try:
-        response = requests.get(url)
-        response.raise_for_status()  # Check for HTTP errors
-        proxies = response.text.strip().split("\r\n")
+        # Use curl to download the file with retries
+        subprocess.run([
+            'curl', '--retry', '3', '-s', '-L', url, '-o', file_path
+        ], check=True)
+        with open(file_path, 'r') as file:
+            proxies = file.readlines()
+        proxies = [proxy.strip() for proxy in proxies if proxy.strip()]
         with open(file_path, 'w') as file:
             file.write("\n".join(proxies))
         print(f"Updated {file_path} with {len(proxies)} proxies.")
-    except requests.RequestException as e:
+    except subprocess.CalledProcessError as e:
         print(f"Failed to update {file_path}: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 def main():
-    for proxy_type, url in zip(FILE_PATHS.keys(), PROXY_LIST_URLS):
+    for proxy_type, url in PROXY_LIST_URLS.items():
         file_path = FILE_PATHS[proxy_type]
         update_proxy_list(url, file_path)
 
